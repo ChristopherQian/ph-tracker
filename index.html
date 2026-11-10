@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>尿液 pH 记录</title>
+
+<!-- PWA -->
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="尿液 pH">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+
+<style>
+  :root{
+    --bg:#0f1115; --card:#1a1d24; --card2:#232730; --line:#2e333d;
+    --fg:#e8eaed; --dim:#9aa0aa; --accent:#4da3ff;
+    --ok:#3ddc84; --warn:#ffb020; --bad:#ff5c5c;
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    padding: calc(var(--safe-t) + 12px) 12px calc(var(--safe-b) + 24px);
+    background:var(--bg); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+    font-size:16px; line-height:1.45;
+    -webkit-text-size-adjust:100%;
+    overscroll-behavior-y:contain;
+  }
+  h1{font-size:19px; margin:0; font-weight:600; letter-spacing:.01em;}
+  .head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px;}
+  .head .goal{font-size:12.5px; color:var(--dim);}
+  .head .goal b{color:var(--ok); font-weight:600;}
+
+  .card{background:var(--card); border-radius:15px; padding:14px; margin-bottom:12px;}
+  .lbl{font-size:12.5px; color:var(--dim); margin-bottom:9px; letter-spacing:.02em;
+       display:flex; justify-content:space-between; align-items:center;}
+  .lbl span:last-child{font-size:11.5px; opacity:.75;}
+
+  /* 今日进度 */
+  .prog{display:grid; grid-template-columns:repeat(8,1fr); gap:6px; margin-top:2px;}
+  .pdot{text-align:center;}
+  .pdot i{
+    display:block; height:6px; border-radius:3px; background:var(--card2);
+    border:1px solid var(--line); margin-bottom:5px;
+  }
+  .pdot.done i{background:var(--ok); border-color:var(--ok);}
+  .pdot b{font-size:9.5px; color:var(--dim); font-weight:400; display:block;
+          transform:scale(.92); white-space:nowrap;}
+  .pdot.done b{color:var(--fg);}
+
+  /* 时段 */
+  .chips{display:grid; grid-template-columns:repeat(4,1fr); gap:7px;}
+  .chip{
+    background:var(--card2); border:1px solid var(--line); color:var(--fg);
+    border-radius:11px; padding:10px 4px; font-size:13px; text-align:center;
+    cursor:pointer; user-select:none; transition:transform .1s, background .12s;
+  }
+  .chip:active{transform:scale(.95);}
+  .chip.on{background:var(--accent); border-color:var(--accent); color:#04121f; font-weight:600;}
+  .chip small{display:block; font-size:10.5px; opacity:.62; margin-top:1px; font-weight:400;}
+  .chip.on small{opacity:.75;}
+
+  /* pH 输入 */
+  .phrow{display:flex; align-items:center; gap:10px; margin-top:16px;}
+  .stepbtn{
+    width:58px; height:58px; border-radius:15px; border:1px solid var(--line);
+    background:var(--card2); color:var(--fg); font-size:25px; font-weight:300;
+    cursor:pointer; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    font-family:inherit; transition:background .1s;
+  }
+  .stepbtn:active{background:var(--accent); color:#04121f;}
+  #phVal{
+    flex:1; text-align:center; font-size:40px; font-weight:600;
+    font-variant-numeric:tabular-nums; letter-spacing:.01em;
+  }
+  #phVal small{font-size:14px; color:var(--dim); font-weight:400; margin-left:5px;}
+  #phHint{text-align:center; font-size:12px; margin-top:2px; height:16px;}
+
+  .quickph{display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-top:10px;}
+  .qph{
+    background:var(--card2); border:1px solid var(--line); color:var(--dim);
+    border-radius:9px; padding:9px 0; font-size:13.5px; text-align:center; cursor:pointer;
+    font-variant-numeric:tabular-nums; font-family:inherit;
+  }
+  .qph:active{background:var(--accent); color:#04121f;}
+
+  .addbtn{
+    width:100%; margin-top:14px; padding:16px; border:none; border-radius:13px;
+    background:var(--accent); color:#04121f; font-size:17px; font-weight:600;
+    cursor:pointer; font-family:inherit; transition:opacity .1s;
+  }
+  .addbtn:active{opacity:.8;}
+
+  /* 汇总 */
+  .stat{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; text-align:center;}
+  .stat div{background:var(--card2); border-radius:11px; padding:11px 4px;}
+  .stat b{display:block; font-size:22px; font-variant-numeric:tabular-nums; line-height:1.2;}
+  .stat span{font-size:11px; color:var(--dim);}
+
+  /* 列表 */
+  .dayhead{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-size:12.5px; color:var(--dim); margin:15px 0 6px; padding-bottom:6px;
+    border-bottom:1px solid var(--line);
+  }
+  .dayhead:first-child{margin-top:2px;}
+  .row{display:flex; align-items:center; gap:10px; padding:10px 2px;
+       border-bottom:1px solid rgba(46,51,61,.45);}
+  .row:last-child{border-bottom:none;}
+  .rtime{font-variant-numeric:tabular-nums; font-size:15px; width:54px; flex:0 0 auto;}
+  .rseg{font-size:12.5px; color:var(--dim); flex:1;}
+  .rph{
+    font-size:19px; font-weight:600; font-variant-numeric:tabular-nums;
+    padding:2px 9px; border-radius:7px; min-width:62px; text-align:center;
+  }
+  .ph-ok{color:var(--ok);} .ph-low{color:var(--warn);} .ph-high{color:var(--bad);}
+  .del{width:32px; height:32px; border-radius:8px; border:none; background:transparent;
+       color:#5a616d; font-size:19px; cursor:pointer; flex:0 0 auto; font-family:inherit;}
+  .del:active{color:var(--bad);}
+  .empty{color:var(--dim); font-size:13.5px; text-align:center; padding:26px 0;}
+
+  .hint{font-size:12.5px; color:var(--dim); line-height:1.65; margin-top:10px;}
+  .hint b{color:var(--fg); font-weight:600;}
+
+  .toolbar{display:flex; gap:8px; margin-top:12px;}
+  .tbtn{flex:1; padding:12px; border-radius:10px; border:1px solid var(--line);
+        background:var(--card2); color:var(--dim); font-size:13px; cursor:pointer; font-family:inherit;}
+  .tbtn:active{color:var(--fg);}
+
+  textarea{
+    width:100%; height:190px; margin-top:10px; padding:10px; border-radius:10px;
+    background:#0b0d11; color:var(--fg); border:1px solid var(--line);
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px;
+    resize:vertical; display:none; line-height:1.5;
+  }
+
+  /* 安装提示 */
+  #installTip{
+    display:none; background:#14314f; border:1px solid #20507f; border-radius:12px;
+    padding:11px 13px; font-size:12.5px; color:#cfe4ff; margin-bottom:12px; line-height:1.6;
+  }
+  #installTip b{color:#fff;}
+  #installTip button{
+    margin-left:8px; background:transparent; border:1px solid #3a6a9e; color:#cfe4ff;
+    border-radius:7px; padding:3px 9px; font-size:11.5px; cursor:pointer; font-family:inherit;
+  }
+
+  .toast{
+    position:fixed; left:50%; bottom:calc(var(--safe-b) + 26px); transform:translateX(-50%) translateY(20px);
+    background:#2b7a4b; color:#eafff3; padding:10px 20px; border-radius:22px;
+    font-size:13.5px; opacity:0; pointer-events:none; transition:.22s; z-index:99;
+    white-space:nowrap;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<div class="head">
+  <h1>尿液 pH 记录</h1>
+  <div class="goal">目标 <b>6.2 – 6.5</b></div>
+</div>
+
+<div id="installTip">
+  <b>添加到主屏幕：</b>点底部「分享」→「添加到主屏幕」，之后就当 App 用。
+  <button onclick="document.getElementById('installTip').style.display='none'">知道了</button>
+</div>
+
+<!-- 今日进度 -->
+<div class="card">
+  <div class="lbl"><span>今日进度</span><span id="progText">—</span></div>
+  <div class="prog" id="prog"></div>
+</div>
+
+<!-- 输入 -->
+<div class="card">
+  <div class="lbl"><span>① 时段</span><span id="segNow"></span></div>
+  <div class="chips" id="chips"></div>
+
+  <div class="lbl" style="margin-top:16px;"><span>② pH 读数</span></div>
+  <div class="phrow">
+    <button class="stepbtn" id="minus">−</button>
+    <div id="phVal">6.0<small>pH</small></div>
+    <button class="stepbtn" id="plus">＋</button>
+  </div>
+  <div id="phHint"></div>
+  <div class="quickph" id="quickph"></div>
+
+  <button class="addbtn" id="add">记 录</button>
+</div>
+
+<!-- 汇总 -->
+<div class="card">
+  <div class="lbl"><span>汇总</span></div>
+  <div class="stat">
+    <div><b id="sCount">0</b><span>条数</span></div>
+    <div><b id="sDays">0</b><span>天数</span></div>
+    <div><b id="sRate">—</b><span>达标率</span></div>
+  </div>
+  <div class="hint" id="verdict">记满 3 天（每天 7~8 个点）就能看出规律。</div>
+  <div class="toolbar">
+    <button class="tbtn" id="export">导出 Markdown</button>
+    <button class="tbtn" id="clear">清空</button>
+  </div>
+  <textarea id="out" readonly></textarea>
+</div>
+
+<!-- 列表 -->
+<div class="card">
+  <div class="lbl"><span>记录</span></div>
+  <div id="list"><div class="empty">还没有记录</div></div>
+</div>
+
+<div class="hint" style="padding:0 6px 10px;">
+  <b>怎么测：</b>试纸浸入新鲜尿 2 秒 → 取出 → 等 30 秒 → 放在白纸上比色。<br>
+  <b>数据说明：</b>存在这台设备本地，不上传。换手机或清除网站数据会丢 —— 记完记得导出。
+</div>
+
+<div class="toast" id="toast">已记录</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var SEGS = [
+    {key:'wake',   name:'晨起',   sub:'空腹'},
+    {key:'am',     name:'上午',   sub:'10:00'},
+    {key:'lunchb', name:'午饭前', sub:'空腹'},
+    {key:'luncha', name:'午饭后', sub:'碱潮'},
+    {key:'pm',     name:'下午',   sub:'17:00'},
+    {key:'dinnerb',name:'晚饭前', sub:'空腹'},
+    {key:'bed',    name:'睡前',   sub:''},
+    {key:'night',  name:'起夜',   sub:'夜间'}
+  ];
+  var QUICK = ['5.4','5.6','5.8','6.0','6.2','6.4','6.6','6.8','6.9','7.0'];
+  var STORE = 'urine_ph_v2';
+
+  var ph = 6.0;
+  var seg = 'wake';
+
+  var $ = function(id){ return document.getElementById(id); };
+
+  /* ---------- 存储 ---------- */
+  function load(){
+    try { var a = JSON.parse(localStorage.getItem(STORE) || '[]'); return Array.isArray(a)?a:[]; }
+    catch(e){ return []; }
+  }
+  function save(a){
+    try { localStorage.setItem(STORE, JSON.stringify(a)); } catch(e){}
+  }
+  function pad(n){ return n<10 ? '0'+n : ''+n; }
+  function dayKey(d){
+    d = d || new Date();
+    return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+  }
+
+  /* ---------- pH 判定 ---------- */
+  function phClass(v){
+    if (v >= 6.2 && v <= 6.5) return 'ph-ok';
+    if (v > 6.5) return 'ph-high';
+    return 'ph-low';
+  }
+  function isOk(v){ return v >= 6.2 && v <= 6.5; }
+  function segName(k){
+    for (var i=0;i<SEGS.length;i++) if (SEGS[i].key===k) return SEGS[i].name;
+    return k;
+  }
+
+  /* ---------- 界面：时段按钮 ---------- */
+  var elChips = $('chips');
+  SEGS.forEach(function(s){
+    var d = document.createElement('div');
+    d.className = 'chip' + (s.key===seg ? ' on' : '');
+    d.dataset.key = s.key;
+    d.innerHTML = s.name + '<small>' + (s.sub || '&nbsp;') + '</small>';
+    d.addEventListener('click', function(){
+      seg = s.key;
+      Array.prototype.forEach.call(elChips.children, function(c){
+        c.classList.toggle('on', c.dataset.key === seg);
+      });
+      $('segNow').textContent = s.name;
+    });
+    elChips.appendChild(d);
+  });
+  $('segNow').textContent = segName(seg);
+
+  /* ---------- 界面：pH 输入 ---------- */
+  var elPh = $('phVal');
+  var elHint = $('phHint');
+
+  function hintFor(v){
+    if (v > 7.0) return {t:'🔴 超过 7.0，磷酸钙结石风险', c:'var(--bad)'};
+    if (v > 6.5) return {t:'偏高，注意别长期超', c:'var(--bad)'};
+    if (v >= 6.2) return {t:'✅ 在目标区 6.2–6.5', c:'var(--ok)'};
+    if (v >= 6.0) return {t:'🟡 略低', c:'var(--warn)'};
+    return {t:'🟠 偏低，尿酸溶解度不足', c:'var(--warn)'};
+  }
+  function renderPh(){
+    elPh.innerHTML = ph.toFixed(1) + '<small>pH</small>';
+    var h = hintFor(ph);
+    elHint.textContent = h.t;
+    elHint.style.color = h.c;
+  }
+  $('minus').addEventListener('click', function(){ ph = Math.max(4.0, +(ph-0.1).toFixed(1)); renderPh(); });
+  $('plus').addEventListener('click',  function(){ ph = Math.min(9.0, +(ph+0.1).toFixed(1)); renderPh(); });
+
+  var elQuick = $('quickph');
+  QUICK.forEach(function(v){
+    var b = document.createElement('button');
+    b.className = 'qph'; b.type='button'; b.textContent = v;
+    b.addEventListener('click', function(){ ph = parseFloat(v); renderPh(); });
+    elQuick.appendChild(b);
+  });
+  renderPh();
+
+  /* ---------- toast ---------- */
+  var toastTimer = null;
+  function toast(msg){
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 1400);
+  }
+
+  /* ---------- 渲染 ---------- */
+  function render(){
+    var arr = load();
+
+    /* 今日进度 */
+    var today = dayKey();
+    var done = {};
+    arr.forEach(function(r){ if (r.day === today) done[r.seg] = true; });
+    var nDone = SEGS.filter(function(s){ return done[s.key]; }).length;
+
+    var elProg = $('prog');
+    elProg.innerHTML = '';
+    SEGS.forEach(function(s){
+      var d = document.createElement('div');
+      d.className = 'pdot' + (done[s.key] ? ' done' : '');
+      d.innerHTML = '<i></i><b>' + s.name.replace('午饭后','午后').replace('午饭前','午前').replace('晚饭前','晚前') + '</b>';
+      elProg.appendChild(d);
+    });
+    $('progText').textContent = nDone + ' / ' + SEGS.length;
+
+    /* 列表 */
+    var elList = $('list');
+    elList.innerHTML = '';
+    if (!arr.length){
+      elList.innerHTML = '<div class="empty">还没有记录</div>';
+    } else {
+      var byDay = {};
+      arr.forEach(function(r){ (byDay[r.day] = byDay[r.day] || []).push(r); });
+      Object.keys(byDay).sort().reverse().forEach(function(day){
+        var rows = byDay[day].slice().sort(function(a,b){ return a.ts - b.ts; });
+        var oks = rows.filter(function(r){ return isOk(r.ph); }).length;
+
+        var h = document.createElement('div');
+        h.className = 'dayhead';
+        h.innerHTML = '<span>'+day+'</span><span>'+rows.length+' 条 · 达标 '+oks+'</span>';
+        elList.appendChild(h);
+
+        rows.forEach(function(r){
+          var row = document.createElement('div');
+          row.className = 'row';
+          row.innerHTML =
+            '<span class="rtime">'+r.time+'</span>' +
+            '<span class="rseg">'+segName(r.seg)+'</span>' +
+            '<span class="rph '+phClass(r.ph)+'">'+r.ph.toFixed(1)+'</span>';
+
+          var btn = document.createElement('button');
+          btn.className = 'del'; btn.type='button'; btn.textContent = '×';
+          btn.addEventListener('click', function(){
+            if (!confirm('删掉这条 ' + r.time + ' ' + r.ph.toFixed(1) + '？')) return;
+            save(load().filter(function(x){ return x.ts !== r.ts; }));
+            render();
+          });
+          row.appendChild(btn);
+          elList.appendChild(row);
+        });
+      });
+    }
+
+    /* 汇总 */
+    var n = arr.length;
+    var ok = arr.filter(function(r){ return isOk(r.ph); }).length;
+    $('sCount').textContent = n;
+    $('sDays').textContent = Object.keys(
+      arr.reduce(function(m,r){ m[r.day]=1; return m; }, {})
+    ).length;
+    $('sRate').textContent = n ? Math.round(ok/n*100) + '%' : '—';
+
+    /* 判读 */
+    var v = $('verdict');
+    if (!n){
+      v.innerHTML = '记满 3 天（每天 7~8 个点）就能看出规律。';
+    } else {
+      var avg = arr.reduce(function(s,r){ return s + r.ph; }, 0) / n;
+      var below = arr.filter(function(r){ return r.ph < 6.2; }).length;
+      var above = arr.filter(function(r){ return r.ph > 6.8; }).length;
+      var t = '均值 <b>' + avg.toFixed(2) + '</b>　·　低于 6.2 的 <b>' + below + '</b> 条　·　高于 6.8 的 <b>' + above + '</b> 条';
+      if (n >= 9){
+        if (avg < 6.2) t += '<br>⚠️ 均值还没到 6.2，酸性时段偏多。';
+        else if (avg <= 6.6) t += '<br>✅ 均值落在目标附近。';
+        else t += '<br>🔴 均值偏高，注意别长期超过 7.0。';
+      }
+      v.innerHTML = t;
+    }
+  }
+
+  /* ---------- 记录 ---------- */
+  $('add').addEventListener('click', function(){
+    var now = new Date();
+    var day = dayKey(now);
+    var arr = load();
+
+    // 同一时段当天已记过 → 询问是否替换，避免手滑重复
+    var dup = arr.filter(function(r){ return r.day === day && r.seg === seg; });
+    if (dup.length){
+      var old = dup[0].ph.toFixed(1);
+      if (!confirm(segName(seg) + ' 今天已记过 ' + old + '，替换成 ' + ph.toFixed(1) + '？')) return;
+      arr = arr.filter(function(r){ return !(r.day === day && r.seg === seg); });
+    }
+
+    arr.push({
+      ts: now.getTime(),
+      day: day,
+      time: pad(now.getHours()) + ':' + pad(now.getMinutes()),
+      seg: seg,
+      ph: ph
+    });
+    save(arr);
+    render();
+    toast((dup.length ? '已替换 ' : '已记录 ') + segName(seg) + '  ' + ph.toFixed(1));
+    if (navigator.vibrate) navigator.vibrate(18);
+  });
+
+  /* ---------- 导出 Markdown ---------- */
+  $('export').addEventListener('click', function(){
+    var arr = load();
+    var out = $('out');
+    out.style.display = 'block';
+
+    if (!arr.length){ out.value = '（还没有记录）'; return; }
+
+    var lines = ['| 日期 | 时间 | 时段 | pH |', '|---|---|---|---|'];
+    arr.slice().sort(function(a,b){ return a.ts - b.ts; }).forEach(function(r){
+      lines.push('| ' + r.day + ' | ' + r.time + ' | ' + segName(r.seg) + ' | ' + r.ph.toFixed(1) + ' |');
+    });
+
+    var n = arr.length;
+    var ok = arr.filter(function(r){ return isOk(r.ph); }).length;
+    var avg = arr.reduce(function(s,r){ return s + r.ph; }, 0) / n;
+    lines.push('');
+    lines.push('> 共 ' + n + ' 条，达标 ' + ok + ' 条（' + Math.round(ok/n*100) + '%），均值 ' + avg.toFixed(2));
+
+    out.value = lines.join('\n');
+    out.style.height = 'auto';
+    out.style.height = Math.min(out.scrollHeight + 26, 460) + 'px';
+    out.select();
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(out.value).then(function(){
+        toast('已复制到剪贴板');
+      }).catch(function(){
+        try { document.execCommand('copy'); toast('已复制'); } catch(e){ toast('请手动复制'); }
+      });
+    } else {
+      try { document.execCommand('copy'); toast('已复制'); } catch(e){ toast('请手动复制'); }
+    }
+  });
+
+  /* ---------- 清空 ---------- */
+  $('clear').addEventListener('click', function(){
+    if (!confirm('清空全部记录？此操作不可恢复。')) return;
+    if (!confirm('再确认一次：真的要清空？')) return;
+    save([]); render();
+  });
+
+  /* ---------- 安装提示（iOS Safari，未安装时） ---------- */
+  try {
+    var standalone = window.navigator.standalone === true ||
+                     window.matchMedia('(display-mode: standalone)').matches;
+    var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    var isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
+    if (isIOS && isSafari && !standalone &&
+        !localStorage.getItem('install_tip_dismissed')) {
+      $('installTip').style.display = 'block';
+    }
+  } catch(e){}
+
+  /* ---------- Service Worker ---------- */
+  if ('serviceWorker' in navigator){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('./sw.js').catch(function(){});
+    });
+  }
+
+  render();
+})();
+</script>
+
+</body>
+</html>
