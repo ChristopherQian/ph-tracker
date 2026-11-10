@@ -187,7 +187,7 @@
 
 <div class="head">
   <h1>尿液 pH 记录</h1>
-  <div class="goal">目标 <b>6.2 – 6.5</b></div>
+  <div class="goal">理想 <b>6.2–6.5</b> · 上限 6.8</div>
 </div>
 
 <div id="installTip">
@@ -292,11 +292,12 @@
 
   /* ---------- pH 判定 ---------- */
   function phClass(v){
-    if (v >= 6.2 && v <= 6.5) return 'ph-ok';
-    if (v > 6.5) return 'ph-high';
-    return 'ph-low';
+    if (v >= 6.2 && v <= 6.5) return 'ph-ok';   // 理想
+    if (v > 6.5) return 'ph-high';              // 偏高
+    return 'ph-low';                             // 偏低
   }
-  function isOk(v){ return v >= 6.2 && v <= 6.5; }
+  // 达标按指南口径 6.2~6.8（6.5~6.8 为可接受区）
+  function isOk(v){ return v >= 6.2 && v <= 6.8; }
   function segName(k){
     for (var i=0;i<SEGS.length;i++) if (SEGS[i].key===k) return SEGS[i].name;
     return k;
@@ -372,9 +373,10 @@
   var elHint = $('phHint');
 
   function hintFor(v){
-    if (v > 7.0) return {t:'🔴 超过 7.0，磷酸钙结石风险', c:'var(--bad)'};
-    if (v > 6.5) return {t:'偏高，注意别长期超', c:'var(--bad)'};
-    if (v >= 6.2) return {t:'✅ 在目标区 6.2–6.5', c:'var(--ok)'};
+    if (v > 7.0) return {t:'🔴 超限，磷酸钙风险明确', c:'var(--bad)'};
+    if (v > 6.8) return {t:'🔴 超过碳酸磷灰石阈值 6.8', c:'var(--bad)'};
+    if (v > 6.5) return {t:'🟡 可接受（尿钙正常时安全）', c:'var(--warn)'};
+    if (v >= 6.2) return {t:'✅ 理想区 6.2–6.5', c:'var(--ok)'};
     if (v >= 6.0) return {t:'🟡 略低', c:'var(--warn)'};
     return {t:'🟠 偏低，尿酸溶解度不足', c:'var(--warn)'};
   }

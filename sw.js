@@ -1,6 +1,6 @@
 /* 尿液 pH 记录 — Service Worker
    改动 index.html / 图标后，把 VERSION 加 1，用户端会自动更新缓存 */
-const VERSION = 'ph-v6';
+const VERSION = 'ph-v7';
 const CACHE = VERSION;
 
 const ASSETS = [
