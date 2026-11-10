@@ -26,7 +26,8 @@
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{height:100%;}
   body{
-    margin:0;
+    margin: 0 auto;
+    max-width: 560px;
     padding: calc(var(--safe-t) + 12px) 12px calc(var(--safe-b) + 24px);
     background:var(--bg); color:var(--fg);
     font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
@@ -271,6 +272,7 @@
 
   var ph = 6.0;
   var seg = 'wake';
+  var manualSeg = false;   // 用户手动点过时段后，不再自动跟随时间
 
   var $ = function(id){ return document.getElementById(id); };
 
@@ -308,15 +310,62 @@
     d.dataset.key = s.key;
     d.innerHTML = s.name + '<small>' + (s.sub || '&nbsp;') + '</small>';
     d.addEventListener('click', function(){
-      seg = s.key;
-      Array.prototype.forEach.call(elChips.children, function(c){
-        c.classList.toggle('on', c.dataset.key === seg);
-      });
-      $('segNow').textContent = s.name;
+      manualSeg = true;          // 手动选过就不再自动跟随
+      applySeg(s.key);
     });
     elChips.appendChild(d);
   });
   $('segNow').textContent = segName(seg);
+
+  /* ---------- 按时间自动判断时段 ---------- */
+  // 起床~09:00 晨起 / 09:00~11:30 上午 / 11:30~13:00 午饭前 / 13:00~15:00 午饭后 /
+  // 15:00~18:00 下午 / 18:00~20:00 晚饭前 / 20:00~23:00 睡前 / 23:00~05:00 起夜
+  var SEG_RANGES = [
+    {key:'wake',    from: 5*60,      to: 9*60      },
+    {key:'am',      from: 9*60,      to: 11*60+30  },
+    {key:'lunchb',  from: 11*60+30,  to: 13*60     },
+    {key:'luncha',  from: 13*60,     to: 15*60     },
+    {key:'pm',      from: 15*60,     to: 18*60     },
+    {key:'dinnerb', from: 18*60,     to: 20*60     },
+    {key:'bed',     from: 20*60,     to: 23*60     },
+    {key:'night',   from: 23*60,     to: 5*60      }
+  ];
+
+  function minutesOf(tv){
+    if (!/^\d{1,2}:\d{2}$/.test(tv || '')) return null;
+    var p = tv.split(':');
+    var h = parseInt(p[0], 10), m = parseInt(p[1], 10);
+    if (isNaN(h) || isNaN(m) || h > 23 || m > 59) return null;
+    return h * 60 + m;
+  }
+
+  function segForMinutes(min){
+    if (min === null) return null;
+    for (var i = 0; i < SEG_RANGES.length; i++){
+      var r = SEG_RANGES[i];
+      if (r.from < r.to){
+        if (min >= r.from && min < r.to) return r.key;
+      } else {
+        if (min >= r.from || min < r.to) return r.key;   // 跨午夜
+      }
+    }
+    return null;
+  }
+
+  function applySeg(key){
+    if (!key) return;
+    seg = key;
+    Array.prototype.forEach.call(elChips.children, function(c){
+      c.classList.toggle('on', c.dataset.key === seg);
+    });
+    $('segNow').textContent = segName(seg);
+  }
+
+  function autoSegFromTime(){
+    if (manualSeg) return;
+    var k = segForMinutes(minutesOf($('timeInput').value));
+    if (k) applySeg(k);
+  }
 
   /* ---------- 界面：pH 输入 ---------- */
   var elPh = $('phVal');
@@ -447,12 +496,24 @@
   function setNow(){
     var n = new Date();
     timeInput.value = pad(n.getHours()) + ':' + pad(n.getMinutes());
+    autoSegFromTime();          // 时段跟着时间走
   }
-  $('nowBtn').addEventListener('click', setNow);
+  timeInput.addEventListener('change', autoSegFromTime);
+  timeInput.addEventListener('input',  autoSegFromTime);
+
+  $('nowBtn').addEventListener('click', function(){
+    manualSeg = false;          // 回到"自动跟随"
+    setNow();
+  });
+
   setNow();
-  // 每次回到前台，若用户没动过时间，自动刷新为当前时间
+
+  // 回到前台时刷新为当前时间（用户没在编辑时间框里的话）
   document.addEventListener('visibilitychange', function(){
-    if (!document.hidden && document.activeElement !== timeInput) setNow();
+    if (!document.hidden && document.activeElement !== timeInput){
+      manualSeg = false;
+      setNow();
+    }
   });
 
   /* ---------- 记录 ---------- */
@@ -473,6 +534,7 @@
 
     day = dayKey(now);
     var timeStr = pad(now.getHours()) + ':' + pad(now.getMinutes());
+    var recSegLabel = segName(seg);        // 先存下要写的时段名，后面重算不影响提示
     var arr = load();
 
     // 同一时段当天已记过 → 询问是否替换，避免手滑重复
@@ -492,8 +554,9 @@
     });
     save(arr);
     render();
+    manualSeg = false;
     setNow();
-    toast((dup.length ? '已替换 ' : '已记录 ') + timeStr + ' ' + segName(seg) + ' ' + ph.toFixed(1));
+    toast((dup.length ? '已替换 ' : '已记录 ') + timeStr + ' ' + recSegLabel + ' ' + ph.toFixed(1));
     if (navigator.vibrate) navigator.vibrate(18);
   });
 
