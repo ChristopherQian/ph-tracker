@@ -99,6 +99,26 @@
   }
   .addbtn:active{opacity:.8;}
 
+  /* 时间 */
+  .timerow{
+    display:flex; align-items:center; gap:10px; margin-top:14px;
+    background:var(--card2); border:1px solid var(--line); border-radius:11px;
+    padding:8px 12px;
+  }
+  .tlbl{font-size:12.5px; color:var(--dim); flex:0 0 auto;}
+  #timeInput{
+    flex:1; background:transparent; border:none; color:var(--fg);
+    font-size:17px; font-variant-numeric:tabular-nums; font-family:inherit;
+    padding:4px 0; min-width:0;
+  }
+  #timeInput::-webkit-calendar-picker-indicator{ filter:invert(.7); cursor:pointer; }
+  .nowbtn{
+    flex:0 0 auto; background:transparent; border:1px solid var(--line);
+    color:var(--dim); border-radius:8px; padding:6px 10px; font-size:12px;
+    cursor:pointer; font-family:inherit;
+  }
+  .nowbtn:active{color:var(--accent); border-color:var(--accent);}
+
   /* 汇总 */
   .stat{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; text-align:center;}
   .stat div{background:var(--card2); border-radius:11px; padding:11px 4px;}
@@ -193,6 +213,12 @@
   </div>
   <div id="phHint"></div>
   <div class="quickph" id="quickph"></div>
+
+  <div class="timerow">
+    <span class="tlbl">记录时间</span>
+    <input type="time" id="timeInput" step="60">
+    <button class="nowbtn" id="nowBtn" type="button">用当前时间</button>
+  </div>
 
   <button class="addbtn" id="add">记 录</button>
 </div>
@@ -416,10 +442,37 @@
     }
   }
 
+  /* ---------- 记录时间：默认手机当前时间，可手动改 ---------- */
+  var timeInput = $('timeInput');
+  function setNow(){
+    var n = new Date();
+    timeInput.value = pad(n.getHours()) + ':' + pad(n.getMinutes());
+  }
+  $('nowBtn').addEventListener('click', setNow);
+  setNow();
+  // 每次回到前台，若用户没动过时间，自动刷新为当前时间
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden && document.activeElement !== timeInput) setNow();
+  });
+
   /* ---------- 记录 ---------- */
   $('add').addEventListener('click', function(){
     var now = new Date();
-    var day = dayKey(now);
+    var day;
+
+    // 用输入框里的时间；为空则退回当前时间
+    var tv = (timeInput.value || '').trim();
+    if (/^\d{1,2}:\d{2}$/.test(tv)){
+      var parts = tv.split(':');
+      var hh = parseInt(parts[0], 10);
+      var mm = parseInt(parts[1], 10);
+      if (hh >= 0 && hh < 24 && mm >= 0 && mm < 60){
+        now.setHours(hh, mm, 0, 0);
+      }
+    }
+
+    day = dayKey(now);
+    var timeStr = pad(now.getHours()) + ':' + pad(now.getMinutes());
     var arr = load();
 
     // 同一时段当天已记过 → 询问是否替换，避免手滑重复
@@ -433,13 +486,14 @@
     arr.push({
       ts: now.getTime(),
       day: day,
-      time: pad(now.getHours()) + ':' + pad(now.getMinutes()),
+      time: timeStr,
       seg: seg,
       ph: ph
     });
     save(arr);
     render();
-    toast((dup.length ? '已替换 ' : '已记录 ') + segName(seg) + '  ' + ph.toFixed(1));
+    setNow();
+    toast((dup.length ? '已替换 ' : '已记录 ') + timeStr + ' ' + segName(seg) + ' ' + ph.toFixed(1));
     if (navigator.vibrate) navigator.vibrate(18);
   });
 
