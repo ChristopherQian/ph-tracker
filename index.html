@@ -60,6 +60,7 @@
   /* 时段 */
   .chips{display:grid; grid-template-columns:repeat(4,1fr); gap:7px;}
   .chip{
+    position:relative;
     background:var(--card2); border:1px solid var(--line); color:var(--fg);
     border-radius:11px; padding:10px 4px; font-size:13px; text-align:center;
     cursor:pointer; user-select:none; transition:transform .1s, background .12s;
@@ -68,6 +69,14 @@
   .chip.on{background:var(--accent); border-color:var(--accent); color:#04121f; font-weight:600;}
   .chip small{display:block; font-size:10.5px; opacity:.62; margin-top:1px; font-weight:400;}
   .chip.on small{opacity:.75;}
+  .chip .cnt{
+    position:absolute; top:-5px; right:-4px; min-width:17px; height:17px;
+    border-radius:9px; background:var(--ok); color:#04121f;
+    font-size:10.5px; font-weight:700; line-height:17px; text-align:center;
+    padding:0 4px; display:none;
+  }
+  .chip.on .cnt{background:#04121f; color:var(--ok);}
+  .chip .cnt.show{display:block;}
 
   /* pH 输入 */
   .phrow{display:flex; align-items:center; gap:10px; margin-top:16px;}
@@ -309,7 +318,7 @@
     var d = document.createElement('div');
     d.className = 'chip' + (s.key===seg ? ' on' : '');
     d.dataset.key = s.key;
-    d.innerHTML = s.name + '<small>' + (s.sub || '&nbsp;') + '</small>';
+    d.innerHTML = s.name + '<small>' + (s.sub || '&nbsp;') + '</small><b class="cnt"></b>';
     d.addEventListener('click', function(){
       manualSeg = true;          // 手动选过就不再自动跟随
       applySeg(s.key);
@@ -414,15 +423,24 @@
 
     /* 今日进度 */
     var today = dayKey();
-    var done = {};
-    arr.forEach(function(r){ if (r.day === today) done[r.seg] = true; });
-    var nDone = SEGS.filter(function(s){ return done[s.key]; }).length;
+    var cnt = {};
+    arr.forEach(function(r){ if (r.day === today) cnt[r.seg] = (cnt[r.seg] || 0) + 1; });
+    var nDone = SEGS.filter(function(s){ return cnt[s.key]; }).length;
+
+    // 时段按钮角标：今天该段记了几条
+    Array.prototype.forEach.call(elChips.children, function(c){
+      var n = cnt[c.dataset.key] || 0;
+      var b = c.querySelector('.cnt');
+      if (!b) return;
+      if (n > 0){ b.textContent = n; b.classList.add('show'); }
+      else { b.textContent = ''; b.classList.remove('show'); }
+    });
 
     var elProg = $('prog');
     elProg.innerHTML = '';
     SEGS.forEach(function(s){
       var d = document.createElement('div');
-      d.className = 'pdot' + (done[s.key] ? ' done' : '');
+      d.className = 'pdot' + (cnt[s.key] ? ' done' : '');
       d.innerHTML = '<i></i><b>' + s.name.replace('午饭后','午后').replace('午饭前','午前').replace('晚饭前','晚前') + '</b>';
       elProg.appendChild(d);
     });
@@ -539,12 +557,15 @@
     var recSegLabel = segName(seg);        // 先存下要写的时段名，后面重算不影响提示
     var arr = load();
 
-    // 同一时段当天已记过 → 询问是否替换，避免手滑重复
-    var dup = arr.filter(function(r){ return r.day === day && r.seg === seg; });
+    // 只拦「同一时段 + 同一数值 + 3 分钟内」的重复（防手滑双击）；
+    // 同段不同时间、或不同数值，一律允许 —— 起夜多次、上午多测都是真实数据。
+    var dup = arr.filter(function(r){
+      return r.day === day && r.seg === seg &&
+             Math.abs(r.ph - ph) < 0.001 &&
+             Math.abs(now.getTime() - r.ts) < 3 * 60 * 1000;
+    });
     if (dup.length){
-      var old = dup[0].ph.toFixed(1);
-      if (!confirm(segName(seg) + ' 今天已记过 ' + old + '，替换成 ' + ph.toFixed(1) + '？')) return;
-      arr = arr.filter(function(r){ return !(r.day === day && r.seg === seg); });
+      if (!confirm('3 分钟内已记过 ' + recSegLabel + ' ' + ph.toFixed(1) + '，要再记一条吗？')) return;
     }
 
     arr.push({
@@ -558,7 +579,7 @@
     render();
     manualSeg = false;
     setNow();
-    toast((dup.length ? '已替换 ' : '已记录 ') + timeStr + ' ' + recSegLabel + ' ' + ph.toFixed(1));
+    toast('已记录 ' + timeStr + ' ' + recSegLabel + ' ' + ph.toFixed(1));
     if (navigator.vibrate) navigator.vibrate(18);
   });
 
