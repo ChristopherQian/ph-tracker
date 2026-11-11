@@ -46,7 +46,7 @@
   .lbl span:last-child{font-size:11.5px; opacity:.75;}
 
   /* 今日进度 */
-  .prog{display:grid; grid-template-columns:repeat(8,1fr); gap:6px; margin-top:2px;}
+  .prog{display:grid; grid-template-columns:repeat(9,1fr); gap:5px; margin-top:2px;}
   .pdot{text-align:center;}
   .pdot i{
     display:block; height:6px; border-radius:3px; background:var(--card2);
@@ -58,7 +58,7 @@
   .pdot.done b{color:var(--fg);}
 
   /* 时段 */
-  .chips{display:grid; grid-template-columns:repeat(4,1fr); gap:7px;}
+  .chips{display:grid; grid-template-columns:repeat(3,1fr); gap:7px;}
   .chip{
     position:relative;
     background:var(--card2); border:1px solid var(--line); color:var(--fg);
@@ -273,6 +273,7 @@
     {key:'luncha', name:'午饭后', sub:'碱潮'},
     {key:'pm',     name:'下午',   sub:'17:00'},
     {key:'dinnerb',name:'晚饭前', sub:'空腹'},
+    {key:'dinnera',name:'晚饭后', sub:'碱潮'},
     {key:'bed',    name:'睡前',   sub:''},
     {key:'night',  name:'起夜',   sub:'夜间'}
   ];
@@ -328,17 +329,19 @@
   $('segNow').textContent = segName(seg);
 
   /* ---------- 按时间自动判断时段 ---------- */
-  // 起床~09:00 晨起 / 09:00~11:30 上午 / 11:30~13:00 午饭前 / 13:00~15:00 午饭后 /
-  // 15:00~18:00 下午 / 18:00~20:00 晚饭前 / 20:00~23:00 睡前 / 23:00~05:00 起夜
+  // 起床~09:00 晨起 / 09:00~11:30 上午 / 11:30~13:00 午饭前 /
+  // 13:00~15:30 午饭后 / 15:30~18:30 下午 / 18:30~19:40 晚饭前 /
+  // 19:40~21:40 晚饭后 / 21:40~23:40 睡前 / 23:40~05:00 起夜
   var SEG_RANGES = [
-    {key:'wake',    from: 5*60,      to: 9*60      },
-    {key:'am',      from: 9*60,      to: 11*60+30  },
-    {key:'lunchb',  from: 11*60+30,  to: 13*60     },
-    {key:'luncha',  from: 13*60,     to: 15*60     },
-    {key:'pm',      from: 15*60,     to: 18*60     },
-    {key:'dinnerb', from: 18*60,     to: 20*60     },
-    {key:'bed',     from: 20*60,     to: 23*60     },
-    {key:'night',   from: 23*60,     to: 5*60      }
+    {key:'wake',    from: 5*60,        to: 9*60        },
+    {key:'am',      from: 9*60,        to: 11*60+30    },
+    {key:'lunchb',  from: 11*60+30,    to: 13*60       },
+    {key:'luncha',  from: 13*60,       to: 15*60+30    },
+    {key:'pm',      from: 15*60+30,    to: 18*60+30    },
+    {key:'dinnerb', from: 18*60+30,    to: 19*60+40    },
+    {key:'dinnera', from: 19*60+40,    to: 21*60+40    },
+    {key:'bed',     from: 21*60+40,    to: 23*60+40    },
+    {key:'night',   from: 23*60+40,    to: 5*60        }
   ];
 
   function minutesOf(tv){
@@ -441,7 +444,7 @@
     SEGS.forEach(function(s){
       var d = document.createElement('div');
       d.className = 'pdot' + (cnt[s.key] ? ' done' : '');
-      d.innerHTML = '<i></i><b>' + s.name.replace('午饭后','午后').replace('午饭前','午前').replace('晚饭前','晚前') + '</b>';
+      d.innerHTML = '<i></i><b>' + s.name.replace('午饭后','午后').replace('午饭前','午前').replace('晚饭前','晚前').replace('晚饭后','晚后') + '</b>';
       elProg.appendChild(d);
     });
     $('progText').textContent = nDone + ' / ' + SEGS.length;
